@@ -28,7 +28,7 @@ export function Button({ label, onPress, variant = 'primary', disabled = false }
       <Text style={[styles.label, variant !== 'primary' && styles[`${variant}Label`]]}>{label}</Text>
     </Pressable>
   );
-}asdasd
+}
 
 const styles = StyleSheet.create({
   base: {
