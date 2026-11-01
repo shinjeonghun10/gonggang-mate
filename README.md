@@ -35,6 +35,8 @@ src/
     chat/[roomId].tsx        S12 채팅방
     game/[roomId].tsx        S16 게임
     review/[appointmentId].tsx  S17 후기작성
+  api/                       화면이 부르는 서버 함수 (지금은 가짜 데이터) → src/api/README.md
+  lib/                       시간 계산, 게시물 노출 규칙 같은 순수 함수
   components/                여러 화면이 같이 쓰는 부품
     Button.tsx, Avatar.tsx
     TimeGrid.tsx             요일×시간 격자 (S06, S08 공용)
@@ -58,7 +60,7 @@ src/
 | S11~S13 채팅                      | `(tabs)/chats` `chat/[roomId]` `popups/MateInfoPopup`  |      |
 | S14~S15 약속                      | `popups/ConfirmAppointmentPopup` `(tabs)/appointments` |      |
 | S16 게임                          | `game/[roomId]`                                        |      |
-| S17 후기·신고/차단                | `review/[appointmentId]`                               |      |
+| S17 후기·차단                    | `review/[appointmentId]`                               |      |
 
 ## 검사 명령어
 

@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { colors } from '@/constants/theme';
 
@@ -10,7 +11,8 @@ import { colors } from '@/constants/theme';
  */
 export default function RootLayout() {
   return (
-    <>
+    // 드래그(TimeGrid 등)를 쓰려면 앱 전체를 GestureHandlerRootView로 감싼다
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
         <Stack.Screen name="index" />
@@ -20,11 +22,12 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="free-time" />
         <Stack.Screen name="board/[category]" />
-        <Stack.Screen name="post/new" options={{ presentation: 'modal' }} />
+        {/* 모달을 아래로 끌어 닫는 동작이 TimeGrid 드래그와 겹치지 않게 끈다 (닫기는 X 버튼) */}
+        <Stack.Screen name="post/new" options={{ presentation: 'modal', gestureEnabled: false }} />
         <Stack.Screen name="chat/[roomId]" />
         <Stack.Screen name="game/[roomId]" />
         <Stack.Screen name="review/[appointmentId]" />
       </Stack>
-    </>
+    </GestureHandlerRootView>
   );
 }

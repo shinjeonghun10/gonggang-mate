@@ -16,6 +16,13 @@ export type TimeString = string;
 /** ISO 날짜시간 문자열 (예: '2026-11-02T03:00:00Z') */
 export type Timestamp = string;
 
+/** 요일 + 시간 구간 (공강 구간, 게시물 약속시간). TimeGrid 입출력 값 */
+export type TimeRange = {
+  weekday: Weekday;
+  start: TimeString; // 'HH:mm'
+  end: TimeString; // 'HH:mm'
+};
+
 export interface User {
   id: string;
   school_id: string;
@@ -25,8 +32,6 @@ export interface User {
   bio: string | null; // 최대 40자
   photo_url: string | null;
   heart_count: number;
-  status: 'active' | 'suspended' | 'banned';
-  suspended_until: Timestamp | null;
   created_at: Timestamp;
 }
 
@@ -67,6 +72,16 @@ export interface ChatRoom {
   post_id: string;
   host_id: string; // 방장
   created_at: Timestamp;
+}
+
+/** 채팅방 입장 요청. 방장이 수락해야 입장된다 (10/31 회의) */
+export interface JoinRequest {
+  id: string;
+  room_id: string;
+  requester_id: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'canceled';
+  created_at: Timestamp;
+  decided_at: Timestamp | null;
 }
 
 export interface ChatMember {
@@ -137,20 +152,6 @@ export interface Block {
   created_at: Timestamp;
 }
 
-export type ReportReason = 'no_show' | 'abuse' | 'fake_profile' | 'other';
-
-export interface Report {
-  id: string;
-  reporter_id: string;
-  target_id: string;
-  appointment_id: string | null;
-  reason: ReportReason;
-  detail: string | null; // other일 때 최대 200자
-  status: 'pending' | 'confirmed' | 'rejected';
-  created_at: Timestamp;
-  resolved_at: Timestamp | null;
-}
-
 /** 게임 5종 (PRD S16) */
 export type GameType = 'ladder' | 'draw' | 'order' | 'wheel' | 'teams';
 
@@ -187,6 +188,8 @@ export interface Place {
 
 export type NotificationType =
   | 'new_message'
+  | 'join_request' // 방장에게: 입장 요청이 왔어요
+  | 'join_accepted' // 요청한 사람에게: 입장이 수락됐어요
   | 'new_member'
   | 'appointment_confirmed'
   | 'appointment_soon'

@@ -5,7 +5,7 @@ import { colors, fontSize, MIN_TOUCH, spacing } from '@/constants/theme';
 type Props = {
   label: string;
   onPress?: () => void;
-  /** primary: 파란 버튼 / secondary: 흰 버튼 / danger: 신고·차단 */
+  /** primary: 파란 버튼 / secondary: 흰 버튼 / danger: 차단 */
   variant?: 'primary' | 'secondary' | 'danger';
   disabled?: boolean;
 };
