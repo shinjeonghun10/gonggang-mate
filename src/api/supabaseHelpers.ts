@@ -22,7 +22,9 @@ export async function requireAuthUser(): Promise<User> {
   return user;
 }
 
-type SupabaseErrorLike = { code?: string; message?: string; name?: string };
+type SupabaseErrorLike = { code?: string; message?: string; name?: string; hint?: string | null };
+
+const API_ERROR_CODES: ApiError['code'][] = ['not_logged_in', 'invalid_input', 'not_allowed', 'not_found', 'room_full', 'already_exists', 'network'];
 
 /** Supabase 에러를 화면에 보여 줄 수 있는 ApiError로 바꾼다. 따로 처리하지 않은 에러는 fallback 문장 */
 export function toApiError(error: SupabaseErrorLike, fallback: string): ApiError {
@@ -30,6 +32,11 @@ export function toApiError(error: SupabaseErrorLike, fallback: string): ApiError
 
   if (error.name === 'AuthRetryableFetchError' || /network request failed|failed to fetch/i.test(error.message ?? '')) {
     return new ApiError('인터넷 연결을 확인해 주세요', 'network');
+  }
+  // 서버 함수(RPC)가 raise exception으로 낸 에러: message는 화면용 한국어 문장, hint는 ApiError code
+  if (error.code === 'P0001' && error.message) {
+    const code = API_ERROR_CODES.find((c) => c === error.hint) ?? 'not_allowed';
+    return new ApiError(error.message, code);
   }
   switch (error.code) {
     case 'over_email_send_rate_limit':

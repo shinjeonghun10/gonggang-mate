@@ -1,35 +1,51 @@
 /**
  * 게시물 = 매칭 목록 (S05 카테고리 새 글 수, S07 매칭 목록, S08 게시물 작성)
  *
- * TODO(C): posts, post_photos, chat_rooms 테이블
- * - getMatchingList는 서버에서 isPostVisibleTo와 같은 규칙으로 걸러야 한다 (차단은 반드시 서버에서)
- * - createPost는 게시물 + 채팅방 + 방장 참여를 한 번에(트랜잭션) 만든다
+ * - 매칭 목록은 서버(get_matching_posts RPC)가 lib/visibility.ts isPostVisibleTo와 같은 규칙으로 거른다 (차단 포함)
+ * - 게시물 작성은 게시물 + 채팅방 + 방장 참여를 한 번에(create_post RPC)
+ *
+ * TODO(C): 사진 첨부(photo_uris)는 Storage 업로드 후 post_photos에 저장 (P2)
  */
+import * as mock from '@/api/mock/posts';
+import { sb, toApiError, USE_MOCK_API } from '@/api/supabaseHelpers';
 import { ApiError, type CreatePostInput, type MyRequestStatus, type PostListItem } from '@/api/types';
-import { blockedUserIdsOf, requireMeId, roomMemberIds, toMini } from '@/api/mock/helpers';
-import { copy, db, delay, newId, nowIso } from '@/api/mock/store';
 import { MAX_ROOM_MEMBERS, POST_CONTENT_MAX, POST_TITLE_MAX } from '@/constants/config';
-import { nextOccurrence, slotsToRanges, timeToMinutes } from '@/lib/time';
-import { isPostVisibleTo } from '@/lib/visibility';
-import type { Category, Post } from '@/types/db';
+import { nextOccurrence, timeToMinutes } from '@/lib/time';
+import type { Category, Weekday } from '@/types/db';
 
-/** S07: 카테고리별 매칭 목록 (최신순). 노출 규칙은 lib/visibility.ts */
+/** get_matching_posts RPC가 돌려주는 한 줄 */
+type MatchingRow = {
+  id: string;
+  room_id: string;
+  category: Category;
+  title: string;
+  content_preview: string;
+  weekday: Weekday;
+  start_time: string;
+  end_time: string;
+  start_at: string;
+  end_at: string;
+  thumbnail_url: string | null;
+  author_id: string;
+  author_nickname: string;
+  author_photo_url: string | null;
+  member_count: number;
+  is_mine: boolean;
+  my_request: MyRequestStatus;
+  created_at: string;
+};
+
+/** S07: 카테고리별 매칭 목록 (최신순). 노출 규칙은 lib/visibility.ts와 같다 */
 export async function getMatchingList(category: Category): Promise<PostListItem[]> {
-  await delay();
-  const meId = requireMeId();
-  const myRanges = slotsToRanges(db.freeSlots.filter((s) => s.user_id === meId));
-  const blocked = blockedUserIdsOf(meId);
-  return copy(
-    db.posts
-      .filter((p) => p.category === category)
-      .filter((p) => isPostVisibleTo({ post: p, viewerId: meId, viewerFreeRanges: myRanges, blockedUserIds: blocked }))
-      .sort((a, b) => b.created_at.localeCompare(a.created_at))
-      .map((p) => toListItem(p, meId)),
-  );
+  if (USE_MOCK_API) return mock.getMatchingList(category);
+  const { data, error } = await sb().rpc('get_matching_posts', { p_category: category });
+  if (error) throw toApiError(error, '게시물을 불러오지 못했어요');
+  return (data as MatchingRow[]).map(toListItem);
 }
 
 /** S05: 카테고리 박스에 표시할 '내게 보이는 글 수' */
 export async function getMatchingCounts(): Promise<Record<Category, number>> {
+  if (USE_MOCK_API) return mock.getMatchingCounts();
   const categories: Category[] = ['meal', 'cafe', 'study', 'walk'];
   const lists = await Promise.all(categories.map((c) => getMatchingList(c)));
   return Object.fromEntries(categories.map((c, i) => [c, lists[i].filter((p) => !p.is_mine).length])) as Record<Category, number>;
@@ -37,8 +53,7 @@ export async function getMatchingCounts(): Promise<Record<Category, number>> {
 
 /** S08 '게시': 게시물과 채팅방을 같이 만들고, 작성자가 방장이 된다 */
 export async function createPost(input: CreatePostInput): Promise<{ post: PostListItem; room_id: string }> {
-  await delay();
-  const meId = requireMeId();
+  if (USE_MOCK_API) return mock.createPost(input);
   const title = input.title.trim();
   const content = input.content.trim();
   if (!title || title.length > POST_TITLE_MAX) throw new ApiError(`제목은 1~${POST_TITLE_MAX}자로 입력해 주세요`, 'invalid_input');
@@ -46,59 +61,47 @@ export async function createPost(input: CreatePostInput): Promise<{ post: PostLi
   if (timeToMinutes(input.range.end) <= timeToMinutes(input.range.start)) throw new ApiError('약속시간을 설정해 주세요', 'invalid_input');
 
   const { start_at, end_at } = nextOccurrence(input.range);
-  const post: Post = {
-    id: newId('p'),
-    author_id: meId,
-    category: input.category,
-    title,
-    content,
-    weekday: input.range.weekday,
-    start_time: input.range.start,
-    end_time: input.range.end,
-    start_at,
-    end_at,
-    status: 'open',
-    created_at: nowIso(),
-  };
-  const room = { id: newId('r'), post_id: post.id, host_id: meId, created_at: post.created_at };
-  db.posts.push(post);
-  db.rooms.push(room);
-  db.members.push({ room_id: room.id, user_id: meId, joined_at: post.created_at, last_read_message_id: null });
-  return { post: copy(toListItem(post, meId)), room_id: room.id };
+  const { data: postId, error } = await sb().rpc('create_post', {
+    p_category: input.category,
+    p_title: title,
+    p_content: content,
+    p_weekday: input.range.weekday,
+    p_start_time: input.range.start,
+    p_end_time: input.range.end,
+    p_start_at: start_at,
+    p_end_at: end_at,
+  });
+  if (error) throw toApiError(error, '게시물을 올리지 못했어요');
+
+  // 내 글은 매칭 목록에 항상 보이므로 목록에서 찾아 같은 모양으로 돌려준다
+  const post = (await getMatchingList(input.category)).find((p) => p.id === postId);
+  if (!post) throw new ApiError('게시물을 올렸지만 불러오지 못했어요. 목록을 새로고침해 주세요', 'not_found');
+  return { post, room_id: post.room_id };
 }
 
-/** 내 게시물 삭제 (채팅방 나가기 대신 방장이 쓰는 기능) */
+/** 내 게시물 삭제 (채팅방 나가기 대신 방장이 쓰는 기능). 약속 확정 전에만 */
 export async function deletePost(postId: string): Promise<void> {
-  await delay();
-  const meId = requireMeId();
-  const post = db.posts.find((p) => p.id === postId);
-  if (!post) throw new ApiError('게시물을 찾을 수 없어요', 'not_found');
-  if (post.author_id !== meId) throw new ApiError('내 게시물만 삭제할 수 있어요', 'not_allowed');
-  post.status = 'deleted';
+  if (USE_MOCK_API) return mock.deletePost(postId);
+  const { error } = await sb().rpc('delete_post', { p_post_id: postId });
+  if (error) throw toApiError(error, '삭제할 수 없는 게시물이에요');
 }
 
-function toListItem(p: Post, meId: string): PostListItem {
-  const room = db.rooms.find((r) => r.post_id === p.id)!;
-  const req = db.joinRequests
-    .filter((j) => j.room_id === room.id && j.requester_id === meId)
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-  const isMember = roomMemberIds(room.id).includes(meId);
-  const my_request: MyRequestStatus = isMember ? 'accepted' : !req || req.status === 'canceled' ? 'none' : req.status;
+function toListItem(r: MatchingRow): PostListItem {
   return {
-    id: p.id,
-    room_id: room.id,
-    category: p.category,
-    title: p.title,
-    content_preview: p.content.slice(0, 60),
-    range: { weekday: p.weekday, start: p.start_time, end: p.end_time },
-    start_at: p.start_at,
-    end_at: p.end_at,
-    thumbnail_url: null,
-    author: toMini(p.author_id),
-    member_count: roomMemberIds(room.id).length,
+    id: r.id,
+    room_id: r.room_id,
+    category: r.category,
+    title: r.title,
+    content_preview: r.content_preview,
+    range: { weekday: r.weekday, start: r.start_time, end: r.end_time },
+    start_at: r.start_at,
+    end_at: r.end_at,
+    thumbnail_url: r.thumbnail_url,
+    author: { id: r.author_id, nickname: r.author_nickname, photo_url: r.author_photo_url },
+    member_count: r.member_count,
     max_members: MAX_ROOM_MEMBERS,
-    is_mine: p.author_id === meId,
-    my_request,
-    created_at: p.created_at,
+    is_mine: r.is_mine,
+    my_request: r.my_request,
+    created_at: r.created_at,
   };
 }
