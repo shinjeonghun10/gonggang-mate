@@ -5,6 +5,7 @@
 
 // ── 공강/약속 시간 격자 (PRD S06, S08) ──
 export const SLOT_MINUTES = 30; // 한 칸 = 30분 (확정)
+export const WEEKDAY_COUNT = 5; // 공강 요일: 월~금 (11/3 결정 3번). 격자·게시물 시간 선택이 이 요일만 보여 준다
 export const DAY_START = '09:00'; // [나중에 논의] 격자 시작 시각 (임시 기본값)
 export const DAY_END = '21:00'; // [나중에 논의] 격자 끝 시각 (임시 기본값)
 
@@ -38,6 +39,10 @@ export const MAX_ROOM_MEMBERS = 20;
 export const REMIND_BEFORE_MINUTES = 30;
 
 // ── 후기·메이트 하트 (PRD 7.4) ──
-export const HEART_THRESHOLD = 4; // 5문항 중 4개 이상 체크하면 하트 +1
+export const HEART_THRESHOLD = 3; // 5문항 중 3개 이상 체크하면 하트 +1 (11/3 결정, 서버 submit_review와 같게)
+
+// ── 현재 활동 여부 (11/3 결정) ──
+export const ACTIVE_WITHIN_MINUTES = 15; // 최근 15분 안에 앱을 쓴 사람 = 활동 중 (서버 is_user_active와 같게)
+export const ACTIVE_PING_MINUTES = 5; // 앱이 켜져 있는 동안 이 간격으로 활동 신호를 보낸다
 
 // 신고 기능은 삭제하고 차단만 구현한다 (10/31 회의).
